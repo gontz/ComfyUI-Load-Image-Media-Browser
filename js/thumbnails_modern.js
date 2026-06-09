@@ -531,7 +531,9 @@ function addBrowserButton(node) {
       const folder = folderFromRelpath(value);
       rememberFolder(node, folder);
       updateWidgetChoicesForFolder(node, folder, currentData);
-      fitNodePreviewToMedia(node, value, mediaModeForNode(node));
+      // Intentionally no auto-resize here — resizing on every value change
+      // (including restores during graph load) would override the node's saved
+      // size. Explicit media selection in the browser handles fitting.
       return typeof originalCallback === "function" ? originalCallback.call(this, value, ...args) : undefined;
     };
     imageWidget.__tmWrappedCallback = true;
@@ -555,8 +557,11 @@ async function refreshNodeFolderChoices(node, force = false) {
     const targetFolder = exists ? folder : folderFromRelpath(widgetForNode(node)?.value || ".") || ".";
     rememberFolder(node, targetFolder);
     updateWidgetChoicesForFolder(node, targetFolder, data);
-    const currentValue = widgetForNode(node)?.value;
-    if (currentValue) fitNodePreviewToMedia(node, currentValue, mediaModeForNode(node));
+    // NOTE: do NOT auto-resize the node here. This runs on graph load and on
+    // node creation, and resizing would discard the node size saved in the
+    // workflow (making every Load Image node balloon on load). The node is only
+    // fitted to the media when the user explicitly picks an item in the browser
+    // (see setNodeMedia).
   } catch (err) {
     console.warn("Thumbnails Modern: could not refresh folder choices", err);
   }
