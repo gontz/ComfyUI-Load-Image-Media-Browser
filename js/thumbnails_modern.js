@@ -225,108 +225,6 @@ function canSelectItem(item, node = currentNode) {
 }
 
 
-function inferMediaTypeFromPath(relpath) {
-  const value = String(relpath || "").toLowerCase();
-  if (/\.(mp4|webm|mov|m4v|mkv|avi)$/i.test(value)) return "video";
-  return "image";
-}
-
-function resizeNodeForAspect(node, width, height) {
-  const mediaWidth = Math.max(1, Number(width || 1));
-  const mediaHeight = Math.max(1, Number(height || 1));
-  const aspect = Math.max(0.05, mediaWidth / mediaHeight);
-
-  const currentWidth = Math.max(320, Math.round(node?.size?.[0] || 320));
-  const chromeWidth = 56;
-  const chromeHeight = 170;
-
-  const is169 = Math.abs(aspect - 16 / 9) < 0.12;
-  const is916 = Math.abs(aspect - 9 / 16) < 0.08;
-  const is11 = Math.abs(aspect - 1) < 0.08;
-  const is43 = Math.abs(aspect - 4 / 3) < 0.08;
-  const is34 = Math.abs(aspect - 3 / 4) < 0.08;
-
-  let targetPreviewWidth;
-  let targetPreviewHeight;
-
-  if (is169) {
-    targetPreviewWidth = 820;
-    targetPreviewHeight = Math.round(targetPreviewWidth * 9 / 16);
-  } else if (is916) {
-    targetPreviewHeight = 640;
-    targetPreviewWidth = Math.round(targetPreviewHeight * 9 / 16);
-  } else if (is11) {
-    targetPreviewWidth = 620;
-    targetPreviewHeight = 620;
-  } else if (is43) {
-    targetPreviewWidth = 760;
-    targetPreviewHeight = Math.round(targetPreviewWidth * 3 / 4);
-  } else if (is34) {
-    targetPreviewHeight = 620;
-    targetPreviewWidth = Math.round(targetPreviewHeight * 3 / 4);
-  } else if (aspect >= 1) {
-    targetPreviewWidth = Math.max(620, Math.min(980, Math.round(mediaWidth * 0.42)));
-    targetPreviewHeight = Math.round(targetPreviewWidth / aspect);
-  } else {
-    targetPreviewHeight = Math.max(360, Math.min(760, Math.round(mediaHeight * 0.42)));
-    targetPreviewWidth = Math.round(targetPreviewHeight * aspect);
-  }
-
-  targetPreviewWidth = Math.max(280, Math.min(980, targetPreviewWidth));
-  targetPreviewHeight = Math.max(180, Math.min(760, targetPreviewHeight));
-
-  let targetWidth = Math.max(currentWidth, targetPreviewWidth + chromeWidth);
-  let targetHeight = targetPreviewHeight + chromeHeight;
-
-  if (aspect >= 1 && targetWidth < 760) {
-    targetWidth = 760;
-    targetPreviewWidth = targetWidth - chromeWidth;
-    targetPreviewHeight = Math.max(180, Math.min(760, Math.round(targetPreviewWidth / aspect)));
-    targetHeight = targetPreviewHeight + chromeHeight;
-  }
-
-  if (aspect < 1 && targetWidth < 420) {
-    targetWidth = 420;
-  }
-
-  node.setSize?.([Math.round(targetWidth), Math.round(targetHeight)]);
-  node.setDirtyCanvas?.(true, true);
-}
-
-async function fitNodePreviewToMedia(node, relpath, explicitType = null) {
-  if (!node || !relpath) return;
-  const mediaType = explicitType || inferMediaTypeFromPath(relpath);
-  const url = mediaUrl(relpath);
-  try {
-    if (mediaType === "video") {
-      await new Promise((resolve, reject) => {
-        const video = document.createElement("video");
-        video.preload = "metadata";
-        video.muted = true;
-        video.playsInline = true;
-        video.onloadedmetadata = () => {
-          resizeNodeForAspect(node, video.videoWidth || 16, video.videoHeight || 9);
-          resolve();
-        };
-        video.onerror = () => reject(new Error("video metadata could not be loaded"));
-        video.src = url;
-      });
-      return;
-    }
-    await new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        resizeNodeForAspect(node, img.naturalWidth || 1, img.naturalHeight || 1);
-        resolve();
-      };
-      img.onerror = () => reject(new Error("image size could not be loaded"));
-      img.src = url;
-    });
-  } catch (err) {
-    console.warn("Media Browser: preview aspect resize failed", err);
-  }
-}
-
 async function setNodeMedia(node, relpath) {
   const widget = widgetForNode(node);
   if (!widget) return;
@@ -337,7 +235,7 @@ async function setNodeMedia(node, relpath) {
   if (Array.isArray(widget.options?.values) && !widget.options.values.includes(relpath)) {
     widget.options.values.unshift(relpath);
   }
-  await fitNodePreviewToMedia(node, relpath);
+  // Never auto-resize the node on selection — respect the user's chosen size.
   widget.callback?.(widget.value);
   node.setDirtyCanvas?.(true, true);
   closeDialog();
